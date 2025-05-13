@@ -38,7 +38,7 @@ def fetch_static_html(url: str) -> str:
     response.raise_for_status()
     return response.text
 
-# Recursively crawl URLs up to max_depth
+# Recursively crawl URLs up to max_depth using dfs
 def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
     visited = set()
     pages = []  # list of (url, html)
@@ -50,6 +50,8 @@ def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
         try:
             html = fetch_dynamic_html(url) if dynamic else fetch_static_html(url)
             pages.append((url, html))
+            # tell users which pages are fetched
+            st.sidebar.success(f"Fetched url: {url}")
             if depth == 0:
                 return
             # parse links
@@ -66,7 +68,7 @@ def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
     crawl(start_url, max_depth)
     return pages
 
-# Save HTML pages to disk and return combined text
+# Save HTML pages to disk and return combined text for reference
 def save_and_extract_text(pages):
     os.makedirs('scraped', exist_ok=True)
     all_docs = []
@@ -85,7 +87,7 @@ def save_and_extract_text(pages):
 # Build a vector store from a URL with recursion support
 def get_vectorstore_from_url(url: str, dynamic: bool = True, max_depth: int = 1):
     pages = crawl_urls(url, dynamic=dynamic, max_depth=max_depth)
-    st.sidebar.success(f"Fetched {len(pages)} pages (depth {max_depth})")
+    st.sidebar.success(f"Fetched {len(pages)} pages (depth {max_depth})")
     docs = save_and_extract_text(pages)
     splitter = RecursiveCharacterTextSplitter()
     chunks = splitter.split_documents(docs)
@@ -102,11 +104,11 @@ def get_context_retriever_chain(vector_store):
     ])
     return create_history_aware_retriever(llm, retriever, prompt)
 
-
+# TODO: provide external links as conversation source
 def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI()
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Answer the user's questions based on the below context:\n\n{context}"),
+        ("system", "Answer the user's questions based on the below context:\n\n{context}, and always reply back the source url of the answer"),
         MessagesPlaceholder(variable_name="chat_history"),
         ("user", "{input}"),
     ])
@@ -124,8 +126,8 @@ def get_response(user_input: str) -> str:
     return out['answer']
 
 # Streamlit app layout
-st.set_page_config(page_title="Chat with Websites", page_icon="🤖")
-st.title("Chat with Websites (Recursive Scraping)")
+st.set_page_config(page_title="Chatime MVP", page_icon="🤖")
+st.title("Chatime MVP (Recursive Scraping)")
 
 with st.sidebar:
     st.header("Settings")
