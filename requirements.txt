@@ -6,3 +6,4 @@ python-dotenv
 streamlit
 chromadb
 beautifulsoup4
+playwright
