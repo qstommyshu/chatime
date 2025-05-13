@@ -10,6 +10,7 @@ from langchain.chains import create_history_aware_retriever, create_retrieval_ch
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
 
 # For dynamic content rendering
 from playwright.sync_api import sync_playwright
@@ -18,6 +19,7 @@ from langchain.schema import Document
 # Load environment variables
 load_dotenv()
 
+# TODO: crawling can be multi-threaded or async
 # Playwright helper to fetch rendered HTML
 def fetch_dynamic_html(url: str, timeout: int = 30000) -> str:
     with sync_playwright() as p:
@@ -29,40 +31,67 @@ def fetch_dynamic_html(url: str, timeout: int = 30000) -> str:
         browser.close()
     return html
 
-# Save (static or dynamic) HTML to disk
-def save_html_content(url: str, dynamic: bool = True) -> tuple[str, str]:
-    if dynamic:
-        html_content = fetch_dynamic_html(url)
-    else:
-        import requests
-        html_content = requests.get(url).text
+# Fetch static HTML via requests
+def fetch_static_html(url: str) -> str:
+    import requests
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.text
 
+# Recursively crawl URLs up to max_depth
+def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
+    visited = set()
+    pages = []  # list of (url, html)
+
+    def crawl(url: str, depth: int):
+        if depth < 0 or url in visited:
+            return
+        visited.add(url)
+        try:
+            html = fetch_dynamic_html(url) if dynamic else fetch_static_html(url)
+            pages.append((url, html))
+            if depth == 0:
+                return
+            # parse links
+            soup = BeautifulSoup(html, 'html.parser')
+            base = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+            for tag in soup.find_all('a', href=True):
+                link = urljoin(base, tag['href'])
+                # only follow same domain links
+                if urlparse(link).netloc == urlparse(start_url).netloc:
+                    crawl(link, depth - 1)
+        except Exception as e:
+            st.sidebar.warning(f"Failed to fetch {url}: {e}")
+
+    crawl(start_url, max_depth)
+    return pages
+
+# Save HTML pages to disk and return combined text
+def save_and_extract_text(pages):
     os.makedirs('scraped', exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    domain = url.replace('https://', '').replace('http://', '').split('/')[0]
-    filename = f"scraped/{domain}_{timestamp}.html"
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-    return filename, html_content
+    all_docs = []
+    for url, html in pages:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        domain = urlparse(url).netloc.replace(':', '_')
+        fname = f"scraped/{domain}_{timestamp}.html"
+        with open(fname, 'w', encoding='utf-8') as f:
+            f.write(html)
+        soup = BeautifulSoup(html, 'html.parser')
+        text = soup.get_text(separator='\n')
+        metadata = {'source': url}
+        all_docs.append(Document(page_content=text, metadata=metadata))
+    return all_docs
 
-# Build a vector store from a URL
-def get_vectorstore_from_url(url: str, dynamic: bool = True):
-    filename, html = save_html_content(url, dynamic=dynamic)
-    st.sidebar.success(f"HTML saved to {filename}")
-
-    # Parse text out of rendered HTML
-    soup = BeautifulSoup(html, 'html.parser')
-    text = soup.get_text(separator='\n')
-
-    # Wrap in a single Document and split
-    doc = Document(page_content=text, metadata={'source': url})
+# Build a vector store from a URL with recursion support
+def get_vectorstore_from_url(url: str, dynamic: bool = True, max_depth: int = 1):
+    pages = crawl_urls(url, dynamic=dynamic, max_depth=max_depth)
+    st.sidebar.success(f"Fetched {len(pages)} pages (depth {max_depth})")
+    docs = save_and_extract_text(pages)
     splitter = RecursiveCharacterTextSplitter()
-    docs = splitter.split_documents([doc])
+    chunks = splitter.split_documents(docs)
+    return Chroma.from_documents(chunks, OpenAIEmbeddings())
 
-    # Create vector store
-    return Chroma.from_documents(docs, OpenAIEmbeddings())
-
-# Build retrieval components as before
+# Build retrieval components
 def get_context_retriever_chain(vector_store):
     llm = ChatOpenAI()
     retriever = vector_store.as_retriever()
@@ -96,12 +125,13 @@ def get_response(user_input: str) -> str:
 
 # Streamlit app layout
 st.set_page_config(page_title="Chat with Websites", page_icon="🤖")
-st.title("Chat with Websites (Dynamic+Static)")
+st.title("Chat with Websites (Recursive Scraping)")
 
 with st.sidebar:
     st.header("Settings")
     website_url = st.text_input("Website URL")
     dynamic = st.checkbox("Render dynamic content?", value=True)
+    max_depth = st.number_input("Max recursion depth", min_value=0, max_value=3, value=1, step=1)
 
 if not website_url:
     st.info("Enter a website URL above to begin scraping...")
@@ -110,7 +140,7 @@ else:
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = [AIMessage(content="Hello! I'm your assistant.")]
     if 'vector_store' not in st.session_state:
-        st.session_state.vector_store = get_vectorstore_from_url(website_url, dynamic)
+        st.session_state.vector_store = get_vectorstore_from_url(website_url, dynamic, max_depth)
 
     # User input & response
     user_query = st.chat_input("Your message...")
