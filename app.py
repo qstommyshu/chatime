@@ -88,6 +88,7 @@ def save_and_extract_text(pages):
 def get_vectorstore_from_url(url: str, dynamic: bool = True, max_depth: int = 1):
     pages = crawl_urls(url, dynamic=dynamic, max_depth=max_depth)
     st.sidebar.success(f"Fetched {len(pages)} pages (depth {max_depth})")
+    # stores metadata
     docs = save_and_extract_text(pages)
     splitter = RecursiveCharacterTextSplitter()
     chunks = splitter.split_documents(docs)
@@ -108,22 +109,37 @@ def get_context_retriever_chain(vector_store):
 def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI()
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Answer the user's questions based on the below context:\n\n{context}, and always reply back the source url of the answer"),
+        ("system", "Answer the user's questions based on the below context:\n\n{context}\n\nAlways include the source URL at the end of your response in the format: Source: [URL]"),
         MessagesPlaceholder(variable_name="chat_history"),
         ("user", "{input}"),
     ])
     stuff_chain = create_stuff_documents_chain(llm, prompt)
     return create_retrieval_chain(retriever_chain, stuff_chain)
 
+# TODO: update it with structured output
 # Orchestrate a single response
 def get_response(user_input: str) -> str:
     retriever_chain = get_context_retriever_chain(st.session_state.vector_store)
     rag_chain = get_conversational_rag_chain(retriever_chain)
-    out = rag_chain.invoke({
+    response = rag_chain.invoke({
         'chat_history': st.session_state.chat_history,
         'input': user_input
     })
-    return out['answer']
+    
+    answer = response['answer']
+    source_docs = response.get('context', [])
+    
+    # Ensure source URL is included if available
+    if source_docs and not "Source:" in answer:
+        sources = set()
+        for doc in source_docs:
+            if hasattr(doc, 'metadata') and 'source' in doc.metadata:
+                sources.add(doc.metadata['source'])
+        
+        if sources:
+            answer += "  \n\nSources: " + ", ".join(sources)
+    print(answer)
+    return answer
 
 # Streamlit app layout
 st.set_page_config(page_title="Chatime MVP", page_icon="🤖")
