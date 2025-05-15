@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
@@ -51,7 +50,8 @@ def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
             html = fetch_dynamic_html(url) if dynamic else fetch_static_html(url)
             pages.append((url, html))
             # tell users which pages are fetched
-            st.sidebar.success(f"Fetched url: {url}")
+            # st.sidebar.success(f"Fetched url: {url}")
+            print(f"Fetched url: {url}")
             if depth == 0:
                 return
             # parse links
@@ -63,9 +63,11 @@ def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
                 if urlparse(link).netloc == urlparse(start_url).netloc:
                     crawl(link, depth - 1)
         except Exception as e:
-            st.sidebar.warning(f"Failed to fetch {url}: {e}")
+            # st.sidebar.warning(f"Failed to fetch {url}: {e}")
+            print(f"Failed to fetch {url}: {e}")
 
     crawl(start_url, max_depth)
+    print("crawling done!")
     return pages
 
 # Save HTML pages to disk and return combined text for reference
@@ -87,7 +89,7 @@ def save_and_extract_text(pages):
 # Build a vector store from a URL with recursion support
 def get_vectorstore_from_url(url: str, dynamic: bool = True, max_depth: int = 1):
     pages = crawl_urls(url, dynamic=dynamic, max_depth=max_depth)
-    st.sidebar.success(f"Fetched {len(pages)} pages (depth {max_depth})")
+    # st.sidebar.success(f"Fetched {len(pages)} pages (depth {max_depth})")
     # stores metadata
     docs = save_and_extract_text(pages)
     # print("docs is")
@@ -118,6 +120,8 @@ class StructuredAnswer(BaseModel):
     answer: str = Field(description="The answer to the user's question.")
     sources: List[str] = Field(description="A list of source URLs used to answer the question.")
 
+from langchain_core.runnables import RunnableMap
+
 # TODO: provide external links as conversation source
 def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI(model="gpt-4o-2024-08-06").with_structured_output(StructuredAnswer)
@@ -126,16 +130,25 @@ def get_conversational_rag_chain(retriever_chain):
         MessagesPlaceholder(variable_name="chat_history"),
         ("user", "{input}"),
     ])
-    stuff_chain = create_stuff_documents_chain(llm, prompt)
-    return create_retrieval_chain(retriever_chain, stuff_chain)
+    rag_chain = (
+        RunnableMap({
+            "context": retriever_chain,
+            "input": lambda x: x["input"],
+            "chat_history": lambda x: x["chat_history"]
+        })
+        | prompt
+        | llm
+    )
+
+    return rag_chain
 
 # TODO: update it with structured output
 # Orchestrate a single response
-def get_response(user_input: str) -> str:
-    retriever_chain = get_context_retriever_chain(st.session_state.vector_store)
+def get_response(user_input: str, store) -> str:
+    retriever_chain = get_context_retriever_chain(store)
     rag_chain = get_conversational_rag_chain(retriever_chain)
     response = rag_chain.invoke({
-        'chat_history': st.session_state.chat_history,
+        'chat_history': [AIMessage(content="Hello! I'm your assistant.")],
         'input': user_input
     })
 
@@ -145,49 +158,10 @@ def get_response(user_input: str) -> str:
     print("answer is: ", answer)
     return answer
     
-    # answer = response['answer']
-    # source_docs = response.get('context', [])
-    
-    # # Ensure source URL is included if available
-    # if source_docs and not "Source:" in answer:
-    #     sources = set()
-    #     for doc in source_docs:
-    #         if hasattr(doc, 'metadata') and 'source' in doc.metadata:
-    #             sources.add(doc.metadata['source'])
-        
-    #     if sources:
-    #         answer += "  \n\nSources: " + ", ".join(sources)
-    # print(answer)
-    # return answer
 
-# Streamlit app layout
-st.set_page_config(page_title="Chatime MVP", page_icon="🤖")
-st.title("Chatime MVP (Recursive Scraping)")
-
-with st.sidebar:
-    st.header("Settings")
-    website_url = st.text_input("Website URL")
-    dynamic = st.checkbox("Render dynamic content?", value=True)
-    max_depth = st.number_input("Max recursion depth", min_value=0, max_value=3, value=1, step=1)
-
-if not website_url:
-    st.info("Enter a website URL above to begin scraping...")
-else:
-    # Initialize session state
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = [AIMessage(content="Hello! I'm your assistant.")]
-    if 'vector_store' not in st.session_state:
-        st.session_state.vector_store = get_vectorstore_from_url(website_url, dynamic, max_depth)
-
-    # User input & response
-    user_query = st.chat_input("Your message...")
-    if user_query:
-        ans = get_response(user_query)
-        st.session_state.chat_history.append(HumanMessage(content=user_query))
-        st.session_state.chat_history.append(AIMessage(content=ans))
-
-    # Display chat
-    for msg in st.session_state.chat_history:
-        role = "AI" if isinstance(msg, AIMessage) else "Human"
-        with st.chat_message(role):
-            st.write(msg.content)
+store = get_vectorstore_from_url("https://qstommyshu.github.io/", dynamic=True, max_depth=3)
+get_response("what is tommy's experience?", store)
+print("\n\n")
+get_response("How many blogs are there?", store)
+print("\n\n")
+get_response("Give me a piece of code snippets used in tommy's blog: grpc-introduction-chapter-2?", store)
