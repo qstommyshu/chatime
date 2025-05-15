@@ -126,7 +126,7 @@ from langchain_core.runnables import RunnableMap
 def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI(model="gpt-4o-2024-08-06").with_structured_output(StructuredAnswer)
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Answer the user's questions based on the below context:\n\n{context}\n\nAlways include the source URL at the end of your response in the format: Source: [URL]"),
+        ("system", "Answer the user's questions based on the below context:\n\n{context}\n\n"),
         MessagesPlaceholder(variable_name="chat_history"),
         ("user", "{input}"),
     ])
