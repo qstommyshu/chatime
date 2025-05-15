@@ -187,3 +187,70 @@ print("\n\n")
 get_response("How many blogs are there?", store)
 print("\n\n")
 get_response("Give me a piece of code snippets used in tommy's blog: grpc-introduction-chapter-2?", store)
+
+
+# ➜ python pinecone_store.py
+# Fetched url: https://qstommyshu.github.io/
+# Fetched url: https://qstommyshu.github.io/resume
+# Fetched url: https://qstommyshu.github.io/blog
+# Fetched url: https://qstommyshu.github.io/opensource
+# Fetched url: https://qstommyshu.github.io/life
+# Fetched url: https://qstommyshu.github.io/contact
+# Fetched url: https://qstommyshu.github.io/blog/grpc-introduction-chapter-1
+# Fetched url: https://qstommyshu.github.io/blog/grpc-introduction-chapter-2
+# Fetched url: https://qstommyshu.github.io/blog/grpc-introduction-chapter-3
+# crawling done!
+# answer is:  Tommy Shu is a Full Stack Software Developer with experience in building modern web applications and distributed systems. Here are some positions he held:
+
+# 1. **Full Stack Software Developer Intern at TD Securities (May 2023 - Dec 2023):**
+#    - Led front-end development efforts and increased test coverage from 30% to 95% using Test Driven Development.
+#    - Developed over 20 trader-facing pages using TypeScript, React, and AgGrid.
+#    - Improved service reliability by 30% through the implementation of a backend data cache.
+
+# 2. **Full Stack Software Developer Intern at TD Securities (May 2022 - Aug 2022):**
+#    - Developed a graph database migration proof of concept with a 40% improvement in query performance.
+#    - Built over 20 REST APIs and created a tool for generating trading reports using Elixir and GraphQL.
+
+# 3. **Software Developer in Test Intern at Caseware International (May 2021 - Apr 2022):**
+#    - Developed a validation system for AWS S3 parquet files, a Fintech BI Microservice, and over 20 end-to-end tests using Cypress.io.
+#    - Designed more than 10 CI/CD pipelines using GitHub Actions.
+
+# Sources: https://qstommyshu.github.io/, https://qstommyshu.github.io/resume
+
+
+
+# answer is:  There are three blog posts on the topic of gRPC, each labeled as a chapter in a series. These blog posts are:
+
+# 1. gRPC Introduction (Chapter 1) - December 14, 2024
+# 2. gRPC Introduction (Chapter 2) - December 18, 2024
+# 3. gRPC Introduction (Chapter 3) - January 4, 2025
+
+# Sources: https://qstommyshu.github.io/blog
+
+
+
+# answer is:  Certainly! Here's a code snippet used in Tommy's blog from the chapter "gRPC Introduction (Chapter 2)":
+
+# ```typescript
+# echo 'syntax = "proto3";
+
+# service rpcExample {
+#     rpc UnaryExample (MyRequest) returns (MyResponse);
+#     rpc ServerStreamExample (MyRequest) returns (stream MyResponse);
+#     rpc ClientStreamExample (stream MyRequest) returns (MyResponse);
+#     rpc BidirectionalExample (stream MyRequest) returns (stream MyResponse);
+# }
+
+# message MyRequest {
+#     int32 id = 1;
+#     string msg = 2;
+# }
+
+# message MyResponse {
+#     string msg = 1;
+# }' > rpc_example.proto
+# ```
+
+# This snippet defines a `.proto` file defining the `rpcExample` service with several RPC methods and message types.
+
+# Sources: https://qstommyshu.github.io/blog/grpc-introduction-chapter-2
