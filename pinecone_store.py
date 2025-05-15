@@ -12,8 +12,10 @@ from pinecone import Pinecone, ServerlessSpec
 import time
 from langchain_pinecone import PineconeVectorStore
 
+import asyncio
 # For dynamic content rendering
 from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 from langchain.schema import Document
 
 # Load environment variables
@@ -40,36 +42,29 @@ if index_name not in existing_indexes:
 index = pc.Index(index_name)
 vector_store = PineconeVectorStore(index=index, embedding=OpenAIEmbeddings())
 
-# TODO: crawling can be multi-threaded or async
 # Playwright helper to fetch rendered HTML
-def fetch_dynamic_html(url: str, timeout: int = 30000) -> str:
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, timeout=timeout)
-        page.wait_for_load_state('networkidle')
-        html = page.content()
-        browser.close()
+async def fetch_dynamic_html(url: str, timeout: int = 30000) -> str:
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url, wait_until="networkidle", timeout=timeout)
+        html = await page.content()
+        await browser.close()
     return html
 
-# Fetch static HTML via requests
-def fetch_static_html(url: str) -> str:
-    import requests
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.text
-
 # Recursively crawl URLs up to max_depth using dfs
-def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
+async def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
     visited = set()
     pages = []  # list of (url, html)
 
-    def crawl(url: str, depth: int):
+    async def crawl(url: str, depth: int):
         if depth < 0 or url in visited:
             return
         visited.add(url)
         try:
-            html = fetch_dynamic_html(url) if dynamic else fetch_static_html(url)
+            html = await fetch_dynamic_html(url)
+
+            # html = await fetch_dynbamic_html(url) if dynamic else fetch_static_html(url)
             pages.append((url, html))
             # tell users which pages are fetched
             # st.sidebar.success(f"Fetched url: {url}")
@@ -83,12 +78,12 @@ def crawl_urls(start_url: str, dynamic: bool, max_depth: int):
                 link = urljoin(base, tag['href'])
                 # only follow same domain links
                 if urlparse(link).netloc == urlparse(start_url).netloc:
-                    crawl(link, depth - 1)
+                    await crawl(link, depth - 1)
         except Exception as e:
             # st.sidebar.warning(f"Failed to fetch {url}: {e}")
             print(f"Failed to fetch {url}: {e}")
 
-    crawl(start_url, max_depth)
+    await crawl(start_url, max_depth)
     print("crawling done!")
     return pages
 
@@ -109,8 +104,8 @@ def save_and_extract_text(pages):
     return all_docs
 
 # Build a vector store from a URL with recursion support
-def get_vectorstore_from_url(url: str, dynamic: bool = True, max_depth: int = 1):
-    pages = crawl_urls(url, dynamic=dynamic, max_depth=max_depth)
+async def get_vectorstore_from_url(url: str, dynamic: bool = True, max_depth: int = 1):
+    pages = await crawl_urls(url, dynamic=dynamic, max_depth=max_depth)
     # stores metadata
     docs = save_and_extract_text(pages)
     splitter = RecursiveCharacterTextSplitter()
@@ -164,7 +159,6 @@ def get_conversational_rag_chain(retriever_chain):
 
     return rag_chain
 
-# TODO: update it with structured output
 # Orchestrate a single response
 def get_response(user_input: str, store) -> str:
     retriever_chain = get_context_retriever_chain(store)
@@ -181,7 +175,7 @@ def get_response(user_input: str, store) -> str:
     return answer
     
 
-store = get_vectorstore_from_url("https://qstommyshu.github.io/", dynamic=True, max_depth=3)
+store = asyncio.run(get_vectorstore_from_url("https://qstommyshu.github.io/", dynamic=True, max_depth=3))
 get_response("what is tommy's experience?", store)
 print("\n\n")
 get_response("How many blogs are there?", store)
