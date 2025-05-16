@@ -14,7 +14,6 @@ from langchain_pinecone import PineconeVectorStore
 
 import asyncio
 # For dynamic content rendering
-from playwright.sync_api import sync_playwright
 from playwright.async_api import async_playwright
 from langchain.schema import Document
 
