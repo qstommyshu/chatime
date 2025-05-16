@@ -90,7 +90,6 @@ def map_to_history(conversation):
         ))
 
 
-
 # Orchestrate a single response
 def get_response(user_input: str, store, history_dict) -> str:
     history = map_to_history(history_dict)
@@ -101,11 +100,14 @@ def get_response(user_input: str, store, history_dict) -> str:
         'input': user_input
     })
 
-    answer = response.answer
-    if response.sources:
-        answer += "\n\nSources: " + ", ".join(response.sources)
-    print("answer is: ", answer)
-    return answer
+    return response.dict()
+
+    # print(f"response is {response}")
+    # answer = response.answer
+    # if response.sources:
+    #     answer += "\n\nSources: " + ", ".join(response.sources)
+    # print("answer is: ", answer)
+    # return answer
     
 
 # history = []
@@ -148,7 +150,7 @@ def chat():
     ans = get_response(question, vector_store, history)
     history.append({"role": "human", "content": question})
     history.append({"role": "ai", "content": ans})
-    return jsonify(history), 200
+    return jsonify(ans), 200
 
 if __name__ == '__main__':
     app.run(port=5000)
