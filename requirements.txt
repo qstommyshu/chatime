@@ -10,3 +10,4 @@ playwright
 flask
 flask-cors
 langchain_pinecone
+gunicorn
