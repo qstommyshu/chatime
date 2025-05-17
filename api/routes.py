@@ -10,6 +10,11 @@ vector_store = initialize_vector_store()
 # Create a Blueprint for API routes
 api_bp = Blueprint('api', __name__)
 
+@api_bp.route('/health')
+def health():
+    return {"status": "ok"}
+
+
 @api_bp.route('/chat', methods=['POST'])
 def chat():
     """
