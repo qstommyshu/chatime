@@ -14,7 +14,7 @@ def create_app():
     app = Flask(__name__)
     
     # Enable CORS
-    CORS(app)
+    CORS(app, resources={r"/*": {"origins": "https://qstommyshu.github.io"}})
     
     # Register blueprints
     app.register_blueprint(api_bp)
