@@ -8,5 +8,5 @@ chromadb
 beautifulsoup4
 playwright
 flask
-flask_cors
+flask-cors
 langchain_pinecone
