@@ -7,3 +7,6 @@ streamlit
 chromadb
 beautifulsoup4
 playwright
+flask
+flask_cors
+langchain_pinecone
